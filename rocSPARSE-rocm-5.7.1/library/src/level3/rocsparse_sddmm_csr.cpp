@@ -26,6 +26,7 @@
 template <typename I, typename J, typename T>
 struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, J, T>
 {
+    /*获取所需的缓冲区大小。返回0表示不需要额外的缓冲区*/
     static rocsparse_status buffer_size(rocsparse_handle     handle,
                                         rocsparse_operation  trans_A,
                                         rocsparse_operation  trans_B,
@@ -52,6 +53,7 @@ struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, 
         return rocsparse_status_success;
     }
 
+    /*预处理SDDMM操作，但这里啥也没干*/
     static rocsparse_status preprocess(rocsparse_handle     handle,
                                        rocsparse_operation  trans_A,
                                        rocsparse_operation  trans_B,
@@ -77,6 +79,7 @@ struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, 
         return rocsparse_status_success;
     }
 
+    /*核心函数：执行SDDMM操作的计算*/
     static rocsparse_status compute(rocsparse_handle     handle,
                                     rocsparse_operation  trans_A,
                                     rocsparse_operation  trans_B,
@@ -99,8 +102,20 @@ struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, 
                                     rocsparse_sddmm_alg  alg,
                                     void*                buffer)
     {
-        static constexpr int NB = 512;
+        static constexpr int NB = 512; // NB：线程块大小，即，每个线程块包含多少个线程
+/*
+定义了一个名为 HLAUNCH 的宏，用于启动一个 GPU kernel
+(NT_) 表示宏的参数，即传入的参数 NT_，表示线程块内的线程数量
+后面的部分是宏定义中的代码块：
+    计算了一个名为 num_blocks_x 的整数变量的值，确定需要启动多少个线程块来处理数据：m表示矩阵维度，NB表示线程块大小，NT_表示一个线程块内的线程数量。
+    变量blocks表示启动 kernel 时的线程块数量。
+    变量threads表示每个线程块内的线程数量
+    hipLaunchKernelGGL()启动了 GPU 上的一个 kernel 函数，即：启动sddmm_csx_kernel这个核函数。
+    （NB线程块大小，NT_线程块内线程数量，blocks启动的线程块数量，threads每个线程块内的线程数量，额外参数0通常用于设置共享内存的大小，handle->stream是GPU上下文的流对象，表示GPU核函数将在哪个流上执行 ）
+    （接下来的参数是 GPU Kernel 函数的参数）
 
+    *(const T*)alpha 表示解引用指针 alpha，以获取指针指向的实际值，这里的alpha应该为指针。
+*/
 #define HLAUNCH(NT_)                                                                  \
     int64_t num_blocks_x = (m - 1) / (NB / NT_) + 1;                                  \
     dim3    blocks(num_blocks_x);                                                     \
@@ -159,12 +174,16 @@ struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, 
                        C_base,                                                        \
                        (T*)buffer)
 
+        // 这个if检查 handle 对象的 pointer_mode 是否为 rocsparse_pointer_mode_host，即是否使用主机指针模式。
+        // 主机指针模式表示数据在主机内存上，并且 alpha 和 beta 参数是主机上的指针。
         if(handle->pointer_mode == rocsparse_pointer_mode_host)
         {
+            // 如果alpha为0，beta为1，则无需操作
             if(*alpha == static_cast<T>(0) && *beta == static_cast<T>(1))
             {
                 return rocsparse_status_success;
             }
+            // 根据 k 的值，选择不同的线程块大小 NT_，然后调用 HLAUNCH(NT_) 或 DLAUNCH(NT_) 来启动 GPU Kernel 来执行计算。
             if(k > 4)
             {
                 HLAUNCH(8);
@@ -182,6 +201,7 @@ struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, 
                 HLAUNCH(1);
             }
         }
+        // 设备指针模式，即数据在 GPU 上，并且 alpha 和 beta 参数是 GPU 上的指针。
         else
         {
             if(k > 4)
@@ -205,6 +225,12 @@ struct rocsparse_sddmm_st<rocsparse_format_csr, rocsparse_sddmm_alg_default, I, 
     }
 };
 
+// 模板实例化
+/* 
+rocsparse_format_csr：表示使用的稀疏矩阵格式为 CSR (Compressed Sparse Row) 格式。
+rocsparse_sddmm_alg_default：表示使用的 SDDMM (Sparse-Dense Matrix Multiplication) 算法为默认算法。
+rocsparse_double_complex：双精度复数
+*/
 template struct rocsparse_sddmm_st<rocsparse_format_csr,
                                    rocsparse_sddmm_alg_default,
                                    int32_t,
