@@ -308,6 +308,7 @@ rocsparse_status rocsparse_csrmm_analysis_template(rocsparse_handle          han
     return rocsparse_status_invalid_value;
 }
 
+/*SpMM核心函数：default算法*/
 template <typename I, typename J, typename T, typename U>
 rocsparse_status rocsparse_csrmm_template_general(rocsparse_handle    handle,
                                                   rocsparse_operation trans_A,
@@ -379,6 +380,11 @@ rocsparse_status rocsparse_csrmm_template_merge(rocsparse_handle          handle
                                                 void*                     temp_buffer,
                                                 bool                      force_conj_A);
 
+/*
+    1. 选择算法：rocsparse_csrmm_alg_default  rocsparse_csrmm_alg_merge  rocsparse_csrmm_alg_row_split
+    2. A是否转置
+
+*/
 template <typename I, typename J, typename T, typename U>
 rocsparse_status rocsparse_csrmm_template_dispatch(rocsparse_handle    handle,
                                                    rocsparse_operation trans_A,
@@ -564,6 +570,7 @@ rocsparse_status rocsparse_csrmm_template_dispatch(rocsparse_handle    handle,
     return rocsparse_status_invalid_value;
 }
 
+/*SpMM：稀疏矩阵x稠密矩阵*/
 template <typename I, typename J, typename T>
 rocsparse_status rocsparse_csrmm_template(rocsparse_handle          handle,
                                           rocsparse_operation       trans_A,
@@ -794,8 +801,9 @@ rocsparse_status rocsparse_csrmm_template(rocsparse_handle          handle,
         return rocsparse_status_invalid_value;
     }
 
-    if(handle->pointer_mode == rocsparse_pointer_mode_device)
+    if(handle->pointer_mode == rocsparse_pointer_mode_device) // alpha和beta存储在GPU中
     {
+        /*实际执行SpMM的函数*/ 
         return rocsparse_csrmm_template_dispatch(handle,
                                                  trans_A,
                                                  trans_B,

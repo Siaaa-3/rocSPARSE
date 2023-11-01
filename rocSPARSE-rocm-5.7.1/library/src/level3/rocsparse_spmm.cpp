@@ -31,9 +31,13 @@
 #include "rocsparse_cscmm.hpp"
 #include "rocsparse_csrmm.hpp"
 
+// rocsparse_spmm_alg可用的所有SPMM算法
+// 将rocsparse_spmm_alg枚举类型转换为rocsparse_bellmm_alg类型
+// rocsparse_bellmm_alg使用Blocked ELL格式的SPMM算法
 rocsparse_status rocsparse_spmm_alg2bellmm_alg(rocsparse_spmm_alg    spmm_alg,
                                                rocsparse_bellmm_alg& bellmm_alg)
 {
+    // spmm default/bell --> bellmm default 
     switch(spmm_alg)
     {
     case rocsparse_spmm_alg_default:
@@ -147,6 +151,21 @@ rocsparse_status rocsparse_spmm_template_auto(rocsparse_handle            handle
                                               size_t*                     buffer_size,
                                               void*                       temp_buffer);
 
+/* 核心函数： SPMM操作*/
+/*
+ * 1. 根据mat_A->forma分类处理：csr coo bell | csc bsr | coo_aos ell
+   2. 根据stage进行处理
+
+   2.1 rocsparse_spmm_stage_buffer_size：
+
+   2.2 rocsparse_spmm_stage_preprocess：
+
+   2.3 rocsparse_spmm_stage_compute
+
+   2.4 rocsparse_spmm_stage_auto
+
+ * 
+*/
 template <typename I, typename J, typename T>
 rocsparse_status rocsparse_spmm_template(rocsparse_handle            handle,
                                          rocsparse_operation         trans_A,
@@ -165,6 +184,7 @@ rocsparse_status rocsparse_spmm_template(rocsparse_handle            handle,
     {
     case rocsparse_format_csr:
     {
+        // rocsparse_csrmm_alg --> rocsparse_csrmm_alg_default
         rocsparse_csrmm_alg csrmm_alg;
         RETURN_IF_ROCSPARSE_ERROR((rocsparse_spmm_alg2csrmm_alg(alg, csrmm_alg)));
 
@@ -873,7 +893,7 @@ static rocsparse_indextype determine_J_index_type(rocsparse_spmat_descr mat)
 
 /*
  * ===========================================================================
- *    C wrapper
+ *    C wrapper C语言封装
  * ===========================================================================
  */
 extern "C" rocsparse_status rocsparse_spmm(rocsparse_handle            handle,

@@ -37,6 +37,8 @@ __launch_bounds__(DIM_X* DIM_Y) ROCSPARSE_KERNEL void csrmm_scale(
     }
 }
 
+/*核心函数：SpMM*/
+// 稀疏矩阵以压缩行存储（CSR）格式存储，不对稀疏矩阵或稠密矩阵进行转置或复共轭转置操作。
 template <unsigned int BLOCKSIZE,
           unsigned int WF_SIZE,
           typename I,
@@ -402,10 +404,11 @@ __launch_bounds__(BLOCKSIZE) ROCSPARSE_KERNEL
                        order,                                                      \
                        descr->base);
 
+/*SpMM核心函数：default算法*/
 template <typename I, typename J, typename T, typename U>
 rocsparse_status rocsparse_csrmmnn_template_general(rocsparse_handle handle,
-                                                    rocsparse_order  order,
-                                                    bool             conj_A,
+                                                    rocsparse_order  order, // 矩阵行优先or列优先
+                                                    bool             conj_A, // 共轭？
                                                     bool             conj_B,
                                                     J                m,
                                                     J                n,
@@ -420,21 +423,21 @@ rocsparse_status rocsparse_csrmmnn_template_general(rocsparse_handle handle,
                                                     const I*                  csr_row_ptr,
                                                     const J*                  csr_col_ind,
                                                     const T*                  B,
-                                                    J                         ldb,
+                                                    J                         ldb, // ?
                                                     J                         batch_count_B,
                                                     I                         batch_stride_B,
                                                     U                         beta_device_host,
                                                     T*                        C,
-                                                    J                         ldc,
+                                                    J                         ldc, // ?
                                                     J                         batch_count_C,
                                                     I                         batch_stride_C)
 {
-#define CSRMMNN_DIM 256
+#define CSRMMNN_DIM 256 //线程块大小
 #define WF_SIZE 8
     hipLaunchKernelGGL(
         (csrmmnn_general_kernel<CSRMMNN_DIM, WF_SIZE>),
-        dim3((m - 1) / (CSRMMNN_DIM / WF_SIZE) + 1, (n - 1) / WF_SIZE + 1, batch_count_C),
-        dim3(CSRMMNN_DIM),
+        dim3((m - 1) / (CSRMMNN_DIM / WF_SIZE) + 1, (n - 1) / WF_SIZE + 1, batch_count_C), // 网格大小 
+        dim3(CSRMMNN_DIM), // 线程块大小
         0,
         handle->stream,
         conj_A,
@@ -874,17 +877,18 @@ rocsparse_status rocsparse_csrmmtt_template_general(rocsparse_handle handle,
          batch_count_C,                             \
          batch_stride_C);
 
+/*SpMM核心函数：计算阶段-default算法*/
 template <typename I, typename J, typename T, typename U>
 rocsparse_status rocsparse_csrmm_template_general(rocsparse_handle    handle,
                                                   rocsparse_operation trans_A,
                                                   rocsparse_operation trans_B,
-                                                  rocsparse_order     order,
+                                                  rocsparse_order     order, // 矩阵C按行还是按列存储
                                                   J                   m,
                                                   J                   n,
                                                   J                   k,
                                                   I                   nnz,
-                                                  J                   batch_count_A,
-                                                  I                   offsets_batch_stride_A,
+                                                  J                   batch_count_A, // 批处理
+                                                  I                   offsets_batch_stride_A, // 批处理
                                                   I                   columns_values_batch_stride_A,
                                                   U                   alpha_device_host,
                                                   const rocsparse_mat_descr descr,
@@ -892,7 +896,7 @@ rocsparse_status rocsparse_csrmm_template_general(rocsparse_handle    handle,
                                                   const I*                  csr_row_ptr,
                                                   const J*                  csr_col_ind,
                                                   const T*                  B,
-                                                  J                         ldb,
+                                                  J                         ldb, // ？
                                                   J                         batch_count_B,
                                                   I                         batch_stride_B,
                                                   U                         beta_device_host,
@@ -900,13 +904,13 @@ rocsparse_status rocsparse_csrmm_template_general(rocsparse_handle    handle,
                                                   J                         ldc,
                                                   J                         batch_count_C,
                                                   I                         batch_stride_C,
-                                                  bool                      force_conj_A)
+                                                  bool                      force_conj_A) // 共轭？
 {
     bool conj_A = (trans_A == rocsparse_operation_conjugate_transpose || force_conj_A);
     bool conj_B = (trans_B == rocsparse_operation_conjugate_transpose);
 
     // Run different csrmm kernels
-    if(trans_A == rocsparse_operation_none)
+    if(trans_A == rocsparse_operation_none) // A没有转置
     {
         if((order == rocsparse_order_column && trans_B == rocsparse_operation_none)
            || (order == rocsparse_order_row && trans_B == rocsparse_operation_transpose)

@@ -26,8 +26,9 @@
 
 #include "common.h"
 
+/* 核心函数：SpMM*/
 template <unsigned int BLOCKSIZE, unsigned int WF_SIZE, typename I, typename J, typename T>
-static ROCSPARSE_DEVICE_ILF void csrmmnn_general_device(bool conj_A,
+static ROCSPARSE_DEVICE_ILF void csrmmnn_general_device(bool conj_A, // 共轭？
                                                         bool conj_B,
                                                         J    M,
                                                         J    N,
@@ -40,14 +41,14 @@ static ROCSPARSE_DEVICE_ILF void csrmmnn_general_device(bool conj_A,
                                                         const J* __restrict__ csr_col_ind,
                                                         const T* __restrict__ csr_val,
                                                         const T* __restrict__ B,
-                                                        J ldb,
+                                                        J ldb, // ?
                                                         I batch_stride_B,
                                                         T beta,
                                                         T* __restrict__ C,
-                                                        J                    ldc,
+                                                        J                    ldc, //?
                                                         I                    batch_stride_C,
-                                                        rocsparse_order      order,
-                                                        rocsparse_index_base idx_base)
+                                                        rocsparse_order      order, // 列主序or行主序
+                                                        rocsparse_index_base idx_base) // 索引的基准（0或1）
 {
     int tid = hipThreadIdx_x;
     J   gid = hipBlockIdx_x * BLOCKSIZE + tid;
